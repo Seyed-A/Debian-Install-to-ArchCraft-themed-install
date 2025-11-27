@@ -48,6 +48,9 @@ cd Debian-Install-to-ArchCraft-themed-install
 
 ```bash
 chmod +x archcraft-debian-installer.sh
+```
+OR
+```bash
 chmod +x archcraft-debian-installer-full.sh
 ```
 
