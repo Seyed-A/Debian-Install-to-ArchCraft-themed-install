@@ -49,7 +49,8 @@ chmod +x archcraft-debian-installer.sh
 ```
 
 5. **Optional cleanup**
-   After installation, you can delete the cloned repository if you like:
+
+After installation, you can delete the cloned repository if you like:
 
 ```bash
 cd ..
@@ -63,14 +64,16 @@ rm -rf Debian-Install-to-ArchCraft-themed-install
 To turn the script into an executable "app" and run it, follow these steps:
 
 1. **Make it executable**
-   Open a terminal in the directory where the script is located and run:
+
+Open a terminal in the directory where the script is located and run:
 
 ```bash
 chmod +x archcraft-debian-installer.sh
 ```
 
 2. **Run the installer**
-   Still in the same directory, launch the script:
+
+Still in the same directory, launch the script:
 
 ```bash
 ./archcraft-debian-installer.sh
@@ -79,3 +82,75 @@ chmod +x archcraft-debian-installer.sh
 🎉 That’s it! The installer will guide you through transforming your Debian system into Archcraft Openbox style with a full GUI.
 
 Enjoy! 🙂
+
+---
+
+## Packages and Components Installed
+
+The installer script installs the following packages and components:
+
+### Essential Tools
+
+* sudo
+* wget
+* git
+* curl
+* unzip
+* xz
+* tar
+* build-essential
+* cmake
+* make
+* meson
+* ninja-build
+* zenity
+
+### Openbox + Plank
+
+* xorg
+* openbox
+* obconf
+* plank
+
+### XFCE Utilities
+
+* xfce4
+* xfce4-goodies
+* alacritty
+* rofi
+* nitrogen
+* feh
+* neofetch
+* kitty
+* pcmanfm
+
+### Themes and Fonts
+
+* adwaita-icon-theme
+* arc-theme
+* papirus-icon-theme
+* ttf-ubuntu-font-family
+* ttf-font-awesome
+
+### Flatpak + Flathub
+
+* flatpak
+* Flathub repository
+
+### Snap
+
+* snapd (with snapd.socket enabled)
+
+### Homebrew
+
+* Homebrew package manager for Linux
+
+### Limine EFI Bootloader
+
+* Limine EFI (installed from GitHub release)
+
+### Archcraft Dotfiles and GUI Setup
+
+* Archcraft Openbox dotfiles
+* Autostart Plank dock
+* Wallpapers and font cache setup
