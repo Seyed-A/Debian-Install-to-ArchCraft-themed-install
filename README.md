@@ -8,23 +8,15 @@ You can run the installer directly without cloning the repository using one of t
 
 ### Minimalist Install (Single Command)
 
-```bash
 bash -c "$(wget -qO- https://raw.githubusercontent.com/Seyed-A/Debian-Install-to-ArchCraft-themed-install/main/archcraft-debian-installer.sh)"
-```
 
-```bash
 bash -c "$(curl -fsSL https://raw.githubusercontent.com/Seyed-A/Debian-Install-to-ArchCraft-themed-install/main/archcraft-debian-installer.sh)"
-```
 
 ### Full Install (Single Command)
 
-```bash
 bash -c "$(wget -qO- https://raw.githubusercontent.com/Seyed-A/Debian-Install-to-ArchCraft-themed-install/main/archcraft-debian-installer-full.sh)"
-```
 
-```bash
 bash -c "$(curl -fsSL https://raw.githubusercontent.com/Seyed-A/Debian-Install-to-ArchCraft-themed-install/main/archcraft-debian-installer-full.sh)"
-```
 
 These commands will download and execute the installer in one step, with no leftover files.
 
@@ -36,48 +28,34 @@ You can install the Archcraft Debian Installer directly from GitHub using the fo
 
 1. **Clone the repository**
 
-```bash
 git clone https://github.com/Seyed-A/Debian-Install-to-ArchCraft-themed-install.git
-```
 
 2. **Navigate to the repository folder**
 
-```bash
 cd Debian-Install-to-ArchCraft-themed-install
-```
 
 3. **Make the installer scripts executable**
 
-```bash
 chmod +x archcraft-debian-installer.sh
-```
 OR
-```bash
 chmod +x archcraft-debian-installer-full.sh
-```
 
 4. **Run Minimalist or Full installer**
 
 * Minimalist install:
 
-```bash
 ./archcraft-debian-installer.sh
-```
 
 * Full install:
 
-```bash
 ./archcraft-debian-installer-full.sh
-```
 
 5. **Optional cleanup**
 
 After installation, you can delete the cloned repository if you like:
 
-```bash
 cd ..
 rm -rf Debian-Install-to-ArchCraft-themed-install
-```
 
 ---
 
@@ -89,19 +67,15 @@ To turn the scripts into executables and run them, follow these steps:
 
 Open a terminal in the directory where the scripts are located and run:
 
-```bash
 chmod +x archcraft-debian-installer.sh
 chmod +x archcraft-debian-installer-full.sh
-```
 
 2. **Run the installer**
 
 Still in the same directory, launch the script of your choice:
 
-```bash
 ./archcraft-debian-installer.sh   # Minimalist install
 ./archcraft-debian-installer-full.sh  # Full install
-```
 
 🎉 The installer will guide you through transforming your Debian system into Archcraft Openbox style with a full GUI.
 
@@ -189,6 +163,5 @@ The installer scripts install the following packages and components:
 #### Screensaver
 
 * Idle-time flying username screensaver
-
   * Customizable inactivity timeout
   * Displays username on top and "on Archcraft" below in floating text
