@@ -1,167 +1,131 @@
 # 🚀 Archcraft Debian Installer
 
-Quick note that the .sh and the .desktop files are the same but this tutorial only covers .sh.
+This repository provides an interactive installer to transform a minimal Debian system into an Archcraft Openbox style setup. The installer asks which packages and components you want at the start, so you can do a minimal or full installation in one go.
+
+> Quick note: The `.sh` script and `.desktop` launcher file are functionally equivalent. This README covers the `.sh` script.
+
+---
 
 ## Quick Install (Single Command)
 
-You can run the installer directly without cloning the repository using one of these single-command methods:
+You can run the installer directly without cloning the repository:
 
-### Minimalist Install (Single Command)
+### Using wget
 
-bash -c "$(wget -qO- https://raw.githubusercontent.com/Seyed-A/Debian-Install-to-ArchCraft-themed-install/main/archcraft-debian-installer.sh)"
+```bash
+bash -c "$(wget -qO- https://github.com/Seyed-A/Debian-Install-to-ArchCraft-themed-install/raw/main/archcraft-debian-installer.sh)"
+```
 
-bash -c "$(curl -fsSL https://raw.githubusercontent.com/Seyed-A/Debian-Install-to-ArchCraft-themed-install/main/archcraft-debian-installer.sh)"
+### Using curl
 
-### Full Install (Single Command)
+```bash
+bash -c "$(curl -fsSL https://github.com/Seyed-A/Debian-Install-to-ArchCraft-themed-install/raw/main/archcraft-debian-installer.sh)"
+```
 
-bash -c "$(wget -qO- https://raw.githubusercontent.com/Seyed-A/Debian-Install-to-ArchCraft-themed-install/main/archcraft-debian-installer-full.sh)"
-
-bash -c "$(curl -fsSL https://raw.githubusercontent.com/Seyed-A/Debian-Install-to-ArchCraft-themed-install/main/archcraft-debian-installer-full.sh)"
-
-These commands will download and execute the installer in one step, with no leftover files.
+> This will download and execute the installer in one step. You will be prompted to select which components to install.
 
 ---
 
 ## Full Installation Tutorial (via Git Clone)
 
-You can install the Archcraft Debian Installer directly from GitHub using the following steps:
-
 1. **Clone the repository**
 
+```bash
 git clone https://github.com/Seyed-A/Debian-Install-to-ArchCraft-themed-install.git
+```
 
 2. **Navigate to the repository folder**
 
+```bash
 cd Debian-Install-to-ArchCraft-themed-install
+```
 
-3. **Make the installer scripts executable**
+3. **Make the installer executable**
 
+```bash
 chmod +x archcraft-debian-installer.sh
-OR
-chmod +x archcraft-debian-installer-full.sh
+```
 
-4. **Run Minimalist or Full installer**
+4. **Run the installer**
 
-* Minimalist install:
-
+```bash
 ./archcraft-debian-installer.sh
+```
 
-* Full install:
-
-./archcraft-debian-installer-full.sh
+> At the start, you will choose which components to install, such as Openbox + Plank, XFCE utilities, themes/fonts, Flatpak, Snap, Homebrew, Limine EFI, and the screensaver.
 
 5. **Optional cleanup**
 
-After installation, you can delete the cloned repository if you like:
+After installation, you can delete the cloned repository:
 
+```bash
 cd ..
 rm -rf Debian-Install-to-ArchCraft-themed-install
+```
 
 ---
 
-## Quick Installation (Single File Method)
+## Using the `.desktop` File
 
-To turn the scripts into executables and run them, follow these steps:
+You can also launch the installer using the `.desktop` file:
 
-1. **Make them executable**
+```bash
+https://github.com/Seyed-A/Debian-Install-to-ArchCraft-themed-install/blob/main/archcraft-debian-installer.desktop
+```
 
-Open a terminal in the directory where the scripts are located and run:
-
-chmod +x archcraft-debian-installer.sh
-chmod +x archcraft-debian-installer-full.sh
-
-2. **Run the installer**
-
-Still in the same directory, launch the script of your choice:
-
-./archcraft-debian-installer.sh   # Minimalist install
-./archcraft-debian-installer-full.sh  # Full install
-
-🎉 The installer will guide you through transforming your Debian system into Archcraft Openbox style with a full GUI.
-
-Enjoy! 🙂
+> This will execute the same installer as the `.sh` script.
 
 ---
 
-## Packages and Components Installed
+## What the Installer Can Do
 
-The installer scripts install the following packages and components:
+The installer lets you optionally install and configure:
 
-### Minimalist Install
+### Essential Tools
 
-#### Essential Tools
+* sudo, wget, git, curl, unzip, xz, tar, build-essential, cmake, make, meson, ninja-build, zenity, python3, python3-tk, xprintidle
 
-* sudo
-* wget
-* git
-* curl
-* unzip
-* xz
-* tar
-* build-essential
-* cmake
-* make
-* meson
-* ninja-build
-* zenity
-* python3
-* python3-tk
-* xprintidle
+### Openbox + Plank
 
-#### Openbox + Plank
+* xorg, openbox, obconf, plank
 
-* xorg
-* openbox
-* obconf
-* plank
+### XFCE Utilities
 
-#### XFCE Utilities
+* xfce4, xfce4-goodies, alacritty, rofi, nitrogen, feh, neofetch, kitty, pcmanfm
 
-* xfce4
-* xfce4-goodies
-* alacritty
-* rofi
-* nitrogen
-* feh
-* neofetch
-* kitty
-* pcmanfm
+### Themes and Fonts
 
-#### Themes and Fonts
+* adwaita-icon-theme, arc-theme, papirus-icon-theme, ttf-ubuntu-font-family, ttf-font-awesome
 
-* adwaita-icon-theme
-* arc-theme
-* papirus-icon-theme
-* ttf-ubuntu-font-family
-* ttf-font-awesome
+### Flatpak + Flathub
 
-#### Flatpak + Flathub
+* flatpak, Flathub repository
 
-* flatpak
-* Flathub repository
-
-#### Snap
+### Snap
 
 * snapd (with snapd.socket enabled)
 
-#### Homebrew
+### Homebrew
 
 * Homebrew package manager for Linux
 
-#### Archcraft Dotfiles and GUI Setup
+### Archcraft Dotfiles and GUI Setup
 
 * Archcraft Openbox dotfiles
 * Autostart Plank dock
 * Wallpapers and font cache setup
 
-### Full Install Only
+### Optional Full Install Components
 
-#### Limine EFI Bootloader
+* Limine EFI bootloader
+* Idle-time flying username screensaver (with customizable timeout)
 
-* Limine EFI (installed from GitHub release)
+---
 
-#### Screensaver
+## Notes
 
-* Idle-time flying username screensaver
-  * Customizable inactivity timeout
-  * Displays username on top and "on Archcraft" below in floating text
+* The installer supports both **interactive GUI mode** via `zenity` and a **silent mode** for scripting.
+* Errors can be optionally reported to GitHub if `gh` CLI is installed and authenticated.
+* You can rollback system state using the backup created during installation.
+
+🎉 Enjoy transforming your Debian system into Archcraft Openbox style!
