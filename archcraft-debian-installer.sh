@@ -3,6 +3,7 @@
 # ===============================
 # Debian → Archcraft Openbox GUI Installer
 # Self-contained, works on minimal/empty Debian
+# Minimal Install
 # ===============================
 
 log() { echo -e "[INFO] $1"; }
@@ -49,7 +50,6 @@ COMPONENTS=$(zenity --list --checklist \
   TRUE "Flatpak + Flathub" \
   TRUE "Snap" \
   TRUE "Homebrew" \
-  TRUE "Limine EFI" \
   --separator=",")
 
 IFS=',' read -ra SELECTION <<< "$COMPONENTS"
@@ -85,15 +85,6 @@ for item in "${SELECTION[@]}"; do
             zenity --info --text="Installing Homebrew..."
             NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
             eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv 2>/dev/null || echo '')"
-            ;;
-        "Limine EFI")
-            zenity --info --text="Installing Limine EFI bootloader..."
-            LIMINE_URL=$(curl -s https://api.github.com/repos/limine-bootloader/limine/releases/latest \
-              | grep browser_download_url | grep x86_64-linux | cut -d '"' -f 4)
-            wget -O ~/limine.zip "$LIMINE_URL"
-            unzip ~/limine.zip -d ~/limine
-            cd ~/limine
-            if [[ -d /boot/efi ]]; then sudo ./limine-install.sh; fi
             ;;
     esac
 done
