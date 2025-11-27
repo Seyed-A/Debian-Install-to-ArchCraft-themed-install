@@ -1,117 +1,225 @@
 #!/bin/bash
+# =======================================================
+# Debian → Archcraft Openbox Full Installer (Single-File)
+# Part 1 of 4
+# Author: Auto-generated
+# =======================================================
 
-# ===============================
-# Debian → Archcraft Openbox GUI Installer
-# Self-contained, works on minimal/empty Debian
-# Full Install
-# ===============================
+# -----------------------------
+# Metadata
+# -----------------------------
+INSTALLER_NAME="Archcraft Full Installer"
+INSTALLER_VERSION="1.0"
+LOG_FILE="$HOME/archcraft_installer.log"
+JSON_LOG="$HOME/archcraft_installer.json"
+START_TIME=$(date +%s)
 
-log() { echo -e "[INFO] $1"; }
-err() { echo -e "[ERROR] $1"; }
+# Installer modes
+DRY_RUN=0
+SILENT=0
+REPAIR=0
 
-# ----- Step 0: Ensure essential commands -----
-ensure_command() {
-    local cmd=$1
-    local pkg=${2:-$cmd}
-    if ! command -v "$cmd" &>/dev/null; then
-        log "$cmd not found. Installing $pkg..."
-        sudo apt update -y
-        sudo apt -y install "$pkg" || err "Failed to install $pkg"
+# -----------------------------
+# Logging Functions
+# -----------------------------
+log() {
+    local msg="$1"
+    echo -e "[INFO] $msg" | tee -a "$LOG_FILE"
+}
+warn() {
+    local msg="$1"
+    echo -e "[WARN] $msg" | tee -a "$LOG_FILE"
+}
+err() {
+    local msg="$1"
+    echo -e "[ERROR] $msg" | tee -a "$LOG_FILE"
+    record_json "error" "$msg"
+}
+record_json() {
+    # record a JSON key-value pair
+    local key="$1"
+    local val="$2"
+    if [[ ! -f "$JSON_LOG" ]]; then
+        echo "{}" > "$JSON_LOG"
+    fi
+    # simple bash JSON update
+    tmp=$(jq --arg k "$key" --arg v "$val" '. + {($k): $v}' "$JSON_LOG" 2>/dev/null)
+    if [[ $? -eq 0 ]]; then
+        echo "$tmp" > "$JSON_LOG"
+    else
+        echo "$JSON_LOG error writing key=$key value=$val"
     fi
 }
 
-ESSENTIALS=(sudo wget git curl unzip xz tar build-essential cmake make meson ninja-build python3 python3-tk xprintidle)
-for cmd in "${ESSENTIALS[@]}"; do
-    if ! command -v "$cmd" &>/dev/null; then
-        if [[ $cmd == "sudo" ]]; then
-            log "sudo not found. Installing sudo (requires root)..."
-            su -c "apt update && apt -y install sudo" || err "Cannot install sudo"
-        else
-            ensure_command "$cmd"
-        fi
-    fi
+# -----------------------------
+# Parse CLI Arguments
+# -----------------------------
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --dry-run) DRY_RUN=1; shift ;;
+        --silent) SILENT=1; shift ;;
+        --repair) REPAIR=1; shift ;;
+        *) shift ;;
+    esac
 done
 
-# ----- Step 1: Ensure GUI toolkit -----
-ensure_command zenity
+# -----------------------------
+# Helper Functions
+# -----------------------------
+run_cmd() {
+    local cmd="$1"
+    if [[ $DRY_RUN -eq 1 ]]; then
+        log "[DRY-RUN] $cmd"
+    else
+        log "Running: $cmd"
+        eval "$cmd"
+        local code=$?
+        if [[ $code -ne 0 ]]; then
+            err "Command failed ($code): $cmd"
+        fi
+    fi
+}
 
-# ----- Step 2: Welcome dialog -----
-zenity --info --title="Debian → Archcraft Installer" \
-  --text="Welcome! This installer will transform your Debian system into Archcraft Openbox style.\nIt works on empty/minimal Debian installs."
+ensure_command() {
+    local cmd="$1"
+    local pkg="${2:-$cmd}"
+    if ! command -v "$cmd" >/dev/null 2>&1; then
+        log "$cmd not found. Installing $pkg..."
+        run_cmd "sudo apt update -y"
+        run_cmd "sudo apt -y install $pkg"
+    else
+        log "$cmd found"
+    fi
+}
 
-# ----- Step 3: Select components -----
-COMPONENTS=$(zenity --list --checklist \
-  --title="Select components to install" \
-  --text="Choose what to install" \
-  --column="Install" --column="Component" \
-  TRUE "Openbox + Plank" \
-  TRUE "XFCE utilities" \
-  TRUE "Themes + Fonts" \
-  TRUE "Flatpak + Flathub" \
-  TRUE "Snap" \
-  TRUE "Homebrew" \
-  TRUE "Limine EFI" \
-  TRUE "Screensaver (username flying text idle-time)" \
-  --separator=",")
+# -----------------------------
+# Essential Packages
+# -----------------------------
+ESSENTIALS=(sudo wget git curl unzip xz tar build-essential cmake make meson ninja-build python3 python3-tk xprintidle zenity)
+for cmd in "${ESSENTIALS[@]}"; do
+    ensure_command "$cmd"
+done
 
-IFS=',' read -ra SELECTION <<< "$COMPONENTS"
+# -----------------------------
+# GUI Welcome
+# -----------------------------
+if command -v zenity >/dev/null 2>&1 && [[ $SILENT -eq 0 ]]; then
+    zenity --info --title="$INSTALLER_NAME" --text="Welcome! This installer will transform your Debian system into Archcraft Openbox.\nVersion: $INSTALLER_VERSION"
+else
+    log "Skipping GUI welcome (silent mode or zenity missing)"
+fi
 
-# ----- Step 4: Install selected components -----
-for item in "${SELECTION[@]}"; do
-    case $item in
+# -----------------------------
+# Component Selection
+# -----------------------------
+if [[ $SILENT -eq 0 ]]; then
+    COMPONENTS=$(zenity --list --checklist \
+      --title="Select components to install" \
+      --text="Choose what to install" \
+      --column="Install" --column="Component" \
+      TRUE "Openbox + Plank" \
+      TRUE "XFCE utilities" \
+      TRUE "Themes + Fonts" \
+      TRUE "Flatpak + Flathub" \
+      TRUE "Snap" \
+      TRUE "Homebrew" \
+      TRUE "Limine EFI" \
+      TRUE "Screensaver (username flying text idle-time)" \
+      --separator=",")
+    IFS=',' read -ra SELECTION <<< "$COMPONENTS"
+else
+    SELECTION=("Openbox + Plank" "XFCE utilities" "Themes + Fonts" "Flatpak + Flathub" "Snap" "Homebrew" "Limine EFI" "Screensaver (username flying text idle-time)")
+fi
+
+# -----------------------------
+# Part 1 Complete
+# -----------------------------
+log "Installer part 1 loaded. Ready for modules..."
+# =======================================================
+# Debian → Archcraft Openbox Full Installer (Single-File)
+# Part 2 of 4
+# Install modules
+# =======================================================
+
+# -----------------------------
+# Helper: Install module function
+# -----------------------------
+install_module() {
+    local module="$1"
+    case "$module" in
         "Openbox + Plank")
-            zenity --info --text="Installing Openbox + Plank..."
-            sudo apt update
-            sudo apt -y install xorg openbox obconf plank || err "Failed Openbox/Plank"
+            log "Installing Openbox + Plank..."
+            run_cmd "sudo apt update -y"
+            run_cmd "sudo apt -y install xorg openbox obconf plank || warn 'Failed Openbox/Plank installation'"
             ;;
         "XFCE utilities")
-            zenity --info --text="Installing XFCE utilities..."
-            sudo apt -y install xfce4 xfce4-goodies alacritty rofi nitrogen feh neofetch kitty pcmanfm || true
+            log "Installing XFCE utilities..."
+            run_cmd "sudo apt -y install xfce4 xfce4-goodies alacritty rofi nitrogen feh neofetch kitty pcmanfm || warn 'Some XFCE utilities failed'"
             ;;
         "Themes + Fonts")
-            zenity --info --text="Installing Themes and Fonts..."
-            sudo apt -y install adwaita-icon-theme arc-theme papirus-icon-theme ttf-ubuntu-font-family ttf-font-awesome || true
+            log "Installing Themes + Fonts..."
+            # Debian replacements for missing fonts
+            run_cmd "sudo apt -y install adwaita-icon-theme arc-theme papirus-icon-theme fonts-ubuntu fonts-font-awesome || warn 'Some themes/fonts missing'"
             ;;
         "Flatpak + Flathub")
-            zenity --info --text="Installing Flatpak and Flathub..."
-            sudo apt -y install flatpak
-            sudo flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo || true
+            log "Installing Flatpak + Flathub..."
+            run_cmd "sudo apt -y install flatpak || warn 'Flatpak installation failed'"
+            run_cmd "sudo flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo || warn 'Flathub remote failed'"
             ;;
         "Snap")
-            zenity --info --text="Installing Snap..."
-            sudo apt -y install snapd
-            sudo systemctl enable --now snapd.socket
-            sudo ln -s /var/lib/snapd/snap /snap 2>/dev/null || true
+            log "Installing Snap..."
+            run_cmd "sudo apt -y install snapd || warn 'Snapd failed'"
+            run_cmd "sudo systemctl enable --now snapd.socket || warn 'Snap socket enable failed'"
+            run_cmd "sudo ln -s /var/lib/snapd/snap /snap 2>/dev/null || true"
             ;;
         "Homebrew")
-            zenity --info --text="Installing Homebrew..."
-            NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-            eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv 2>/dev/null || echo '')"
+            log "Installing Homebrew..."
+            run_cmd 'NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"'
+            run_cmd 'eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv 2>/dev/null || echo '')"'
             ;;
-        "Limine EFI")
-            zenity --info --text="Installing Limine EFI bootloader..."
-            LIMINE_URL=$(curl -s https://api.github.com/repos/limine-bootloader/limine/releases/latest \
-              | grep browser_download_url | grep x86_64-linux | cut -d '"' -f 4)
-            wget -O ~/limine.zip "$LIMINE_URL"
-            unzip ~/limine.zip -d ~/limine
-            cd ~/limine
-            if [[ -d /boot/efi ]]; then sudo ./limine-install.sh; fi
+        *)
+            warn "Unknown module: $module"
             ;;
-        "Screensaver (username flying text idle-time)")
-            zenity --info --text="Installing flying username screensaver (idle-time)..."
+    esac
+}
 
-            # Ask user for inactivity timeout in minutes
-            SC_TIMEOUT=$(zenity --entry --title="Screensaver Timeout" \
-              --text="Enter inactivity timeout in minutes:" --entry-text="5")
-            SC_TIMEOUT=${SC_TIMEOUT:-5}
+# -----------------------------
+# Iterate over selections
+# -----------------------------
+for module in "${SELECTION[@]}"; do
+    install_module "$module"
+done
 
-            # Save timeout to dedicated config folder
-            mkdir -p ~/.config/archcraft-screensaver
-            echo "$SC_TIMEOUT" > ~/.config/archcraft-screensaver/config
+# -----------------------------
+# Part 2 Complete
+# -----------------------------
+log "Installer part 2 loaded. Modules installed."
+# =======================================================
+# Debian → Archcraft Openbox Full Installer (Single-File)
+# Part 3 of 4
+# Screensaver, EFI, Dotfiles, Wallpapers, Rollback
+# =======================================================
 
-            # Create flying text script
-            mkdir -p ~/bin
-            cat > ~/bin/username_flying_text.py <<'EOF'
+# -----------------------------
+# Screensaver (username flying text idle-time)
+# -----------------------------
+install_screensaver() {
+    log "Installing flying username screensaver..."
+
+    # Ask user for inactivity timeout in minutes (default 5)
+    if [[ $SILENT -eq 0 ]]; then
+        SC_TIMEOUT=$(zenity --entry --title="Screensaver Timeout" \
+          --text="Enter inactivity timeout in minutes:" --entry-text="5")
+    else
+        SC_TIMEOUT=5
+    fi
+    SC_TIMEOUT=${SC_TIMEOUT:-5}
+
+    mkdir -p ~/.config/archcraft-screensaver
+    echo "$SC_TIMEOUT" > ~/.config/archcraft-screensaver/config
+
+    mkdir -p ~/bin
+    cat > ~/bin/username_flying_text.py <<'EOF'
 #!/usr/bin/env python3
 import tkinter as tk, random, os
 
@@ -146,11 +254,11 @@ move()
 root.mainloop()
 EOF
 
-            chmod +x ~/bin/username_flying_text.py
+    chmod +x ~/bin/username_flying_text.py
 
-            # Create systemd user service
-            mkdir -p ~/.config/systemd/user
-            cat > ~/.config/systemd/user/archcraft-screensaver.service <<'EOF'
+    # Systemd service
+    mkdir -p ~/.config/systemd/user
+    cat > ~/.config/systemd/user/archcraft-screensaver.service <<'EOF'
 [Unit]
 Description=Archcraft flying username screensaver (idle-time)
 
@@ -163,7 +271,6 @@ while true; do
     IDLE_MIN=$(cat "$CONFIG")
     THRESHOLD=$((IDLE_MIN*60*1000))
     if [ "$IDLE_MS" -ge "$THRESHOLD" ]; then
-        # run screensaver
         ~/bin/username_flying_text.py
     fi
     sleep 5
@@ -172,22 +279,38 @@ done
 Restart=always
 EOF
 
-            # Enable systemd service
-            systemctl --user daemon-reload
-            systemctl --user enable --now archcraft-screensaver.service
-            ;;
-    esac
-done
+    run_cmd "systemctl --user daemon-reload"
+    run_cmd "systemctl --user enable --now archcraft-screensaver.service"
+}
 
-# ----- Step 5: Pull Archcraft Openbox dotfiles -----
-zenity --info --text="Setting up Archcraft Openbox dotfiles..."
-mkdir -p ~/.config
-git clone https://github.com/archcraft-os/archcraft-openbox.git ~/archcraft-openbox
-cp -r ~/archcraft-openbox/files/* ~/.config/
+# -----------------------------
+# Limine EFI Bootloader
+# -----------------------------
+install_limine() {
+    log "Installing Limine EFI bootloader..."
+    LIMINE_URL=$(curl -s https://api.github.com/repos/limine-bootloader/limine/releases/latest \
+      | grep browser_download_url | grep x86_64-linux | cut -d '"' -f 4)
+    run_cmd "wget -O ~/limine.zip \"$LIMINE_URL\""
+    run_cmd "unzip ~/limine.zip -d ~/limine"
+    cd ~/limine || return
+    if [[ -d /boot/efi ]]; then
+        run_cmd "sudo ./limine-install.sh"
+    else
+        warn "No /boot/efi found, skipping Limine installation"
+    fi
+}
 
-# ----- Step 6: Autostart Plank -----
-mkdir -p ~/.config/autostart
-cat > ~/.config/autostart/plank.desktop <<EOL
+# -----------------------------
+# Dotfiles & Autostart Plank
+# -----------------------------
+setup_dotfiles() {
+    log "Pulling Archcraft Openbox dotfiles..."
+    mkdir -p ~/.config
+    run_cmd "git clone https://github.com/archcraft-os/archcraft-openbox.git ~/archcraft-openbox"
+    run_cmd "cp -r ~/archcraft-openbox/files/* ~/.config/"
+
+    mkdir -p ~/.config/autostart
+    cat > ~/.config/autostart/plank.desktop <<EOL
 [Desktop Entry]
 Type=Application
 Exec=plank
@@ -197,14 +320,164 @@ X-GNOME-Autostart-enabled=true
 Name=Plank
 Comment=Start Plank dock
 EOL
+}
 
-# ----- Step 7: Wallpapers + font cache -----
-mkdir -p ~/Pictures/Wallpapers
-cp -r ~/archcraft-openbox/files/wallpapers/* ~/Pictures/Wallpapers/ || true
-fc-cache -fv
+# -----------------------------
+# Wallpapers + Font Cache
+# -----------------------------
+setup_wallpapers_fonts() {
+    mkdir -p ~/Pictures/Wallpapers
+    run_cmd "cp -r ~/archcraft-openbox/files/wallpapers/* ~/Pictures/Wallpapers/ || true"
+    run_cmd "fc-cache -fv"
+}
 
-# ----- Step 8: Cleanup -----
-sudo apt -y autoremove
-sudo apt -y clean
+# -----------------------------
+# Offline Cache / Rollback (basic)
+# -----------------------------
+backup_state() {
+    log "Creating system state snapshot for rollback..."
+    mkdir -p ~/archcraft_installer_backup
+    run_cmd "dpkg --get-selections > ~/archcraft_installer_backup/dpkg-selections.bak"
+    run_cmd "cp -r ~/.config ~/archcraft_installer_backup/config_bak"
+}
 
-zenity --info --title="Installation Complete" --text="Debian → Archcraft Openbox transformation is complete!\nReboot to start your GUI."
+rollback() {
+    log "Rollback initiated..."
+    if [[ -f ~/archcraft_installer_backup/dpkg-selections.bak ]]; then
+        run_cmd "sudo dpkg --set-selections < ~/archcraft_installer_backup/dpkg-selections.bak"
+        run_cmd "sudo apt-get dselect-upgrade -y"
+    fi
+    if [[ -d ~/archcraft_installer_backup/config_bak ]]; then
+        run_cmd "cp -r ~/archcraft_installer_backup/config_bak/* ~/.config/"
+    fi
+    log "Rollback complete."
+}
+
+# -----------------------------
+# Execute part 3 components
+# -----------------------------
+for module in "${SELECTION[@]}"; do
+    case "$module" in
+        "Screensaver (username flying text idle-time)") install_screensaver ;;
+        "Limine EFI") install_limine ;;
+    esac
+done
+
+backup_state
+setup_dotfiles
+setup_wallpapers_fonts
+
+log "Installer part 3 loaded. Screensaver, EFI, dotfiles, wallpapers, rollback ready."
+# =======================================================
+# Debian → Archcraft Openbox Full Installer (Single-File)
+# Part 4 of 4
+# Error reporting, self-update, uninstaller, cleanup
+# =======================================================
+
+# -----------------------------
+# GitHub Mode 3 Error Reporting
+# -----------------------------
+report_error_github() {
+    local error_msg="$1"
+    log "Preparing GitHub error report..."
+    
+    if command -v gh >/dev/null 2>&1; then
+        if ! gh auth status >/dev/null 2>&1; then
+            log "GitHub CLI not authenticated. Prompting login..."
+            run_cmd "gh auth login"
+        fi
+        TITLE="Installer Error on $(hostname) at $(date)"
+        BODY="Error details:\n\`\`\`\n${error_msg}\n\`\`\`"
+        log "Submitting error report via GitHub Mode 3..."
+        gh issue create --repo Seyed-A/Debian-Install-to-ArchCraft-themed-install \
+            --title "$TITLE" --body "$BODY" || warn "Failed to submit GitHub issue"
+    else
+        warn "GitHub CLI not found, saving local issue report..."
+        mkdir -p ~/archcraft_installer_reports
+        FILE=~/archcraft_installer_reports/issue_$(date +%Y%m%d%H%M%S).md
+        echo -e "# Installer Error Report\n\n$error_msg" > "$FILE"
+        log "Saved local report at $FILE"
+    fi
+}
+
+# -----------------------------
+# Trap errors
+# -----------------------------
+trap 'err "Unexpected error occurred at line $LINENO"; report_error_github "Unexpected error at line $LINENO"' ERR
+
+# -----------------------------
+# Self-Update
+# -----------------------------
+self_update() {
+    log "Checking for installer updates..."
+    TMPFILE=$(mktemp)
+    run_cmd "curl -fsSL https://raw.githubusercontent.com/Seyed-A/Debian-Install-to-ArchCraft-themed-install/main/installer.sh -o $TMPFILE"
+    if ! cmp -s "$TMPFILE" "$0"; then
+        log "New installer version detected. Updating..."
+        cp "$TMPFILE" "$HOME/archcraft_installer_updated.sh"
+        chmod +x "$HOME/archcraft_installer_updated.sh"
+        zenity --info --text="Installer updated. Run $HOME/archcraft_installer_updated.sh for latest version." || true
+    else
+        log "Installer is up-to-date."
+    fi
+}
+
+# -----------------------------
+# Export / Clone Configuration
+# -----------------------------
+export_config() {
+    log "Exporting Archcraft configuration..."
+    BACKUP_DIR=~/archcraft_installer_export
+    mkdir -p "$BACKUP_DIR"
+    run_cmd "cp -r ~/.config ~/Pictures ~/archcraft_openbox_files $BACKUP_DIR/"
+    log "Configuration exported to $BACKUP_DIR"
+}
+
+# -----------------------------
+# Uninstaller
+# -----------------------------
+uninstall_archcraft() {
+    log "Uninstalling Archcraft components..."
+    run_cmd "systemctl --user stop archcraft-screensaver.service || true"
+    run_cmd "systemctl --user disable archcraft-screensaver.service || true"
+    run_cmd "rm -rf ~/bin/username_flying_text.py ~/.config/archcraft-screensaver"
+    run_cmd "rm -rf ~/.config/archcraft-openbox ~/.config/autostart/plank.desktop"
+    run_cmd "rm -rf ~/Pictures/Wallpapers"
+    log "Uninstallation complete. Some packages remain installed (manual removal may be required)."
+}
+
+# -----------------------------
+# Final Cleanup
+# -----------------------------
+final_cleanup() {
+    log "Cleaning up apt cache..."
+    run_cmd "sudo apt -y autoremove"
+    run_cmd "sudo apt -y clean"
+    END_TIME=$(date +%s)
+    DURATION=$((END_TIME - START_TIME))
+    log "Installation completed in ${DURATION}s"
+}
+
+# -----------------------------
+# Execute final tasks
+# -----------------------------
+self_update
+export_config
+final_cleanup
+
+# Completion message
+if [[ $SILENT -eq 0 ]]; then
+    zenity --info --title="Installation Complete" --text="Debian → Archcraft Openbox transformation is complete!\nReboot to start your GUI."
+else
+    log "Installation complete. Reboot to start GUI."
+fi
+
+# Optionally, prompt for uninstaller
+if [[ $SILENT -eq 0 ]]; then
+    zenity --question --title="Uninstall" --text="Do you want to uninstall Archcraft components now?"
+    if [[ $? -eq 0 ]]; then
+        uninstall_archcraft
+    fi
+fi
+
+log "Installer finished successfully."
