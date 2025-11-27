@@ -1,5 +1,7 @@
 # 🚀 Archcraft Debian Installer
 
+Quick note that the .sh and the .desktop files are the same but this tutorial only covers .sh.
+
 ## Quick Install (Single Command)
 
 You can run the installer directly without cloning the repository using one of these single-command methods:
