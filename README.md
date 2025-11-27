@@ -24,6 +24,9 @@ bash -c "$(curl -fsSL https://github.com/Seyed-A/Debian-Install-to-ArchCraft-the
 
 > This will download and execute the installer in one step. You will be prompted to select which components to install.
 
+> Note: These commands always fetch and run the current version of the script from GitHub.  
+> If you have already run the latest version, you **do not need to run it again** unless there is a new update in the repository.
+
 ---
 
 ## Full Installation Tutorial (via Git Clone)
