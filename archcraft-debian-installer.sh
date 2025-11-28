@@ -50,7 +50,7 @@ for pkg in "${PACKAGES[@]}"; do
         if ! sudo apt-get install -y "$pkg" 2>&1 | tee -a "$LOG_FILE"; then
             log_msg "Error installing $pkg"
         fi
-    done
+    }
 done
 progress_update 15
 
