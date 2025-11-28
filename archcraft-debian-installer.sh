@@ -82,26 +82,56 @@ mkdir -p "$HOME/.local/share/fonts" 2>/dev/null || log_msg "Warning: Cannot crea
 
 progress_update 60
 
-progress_update 65
+# -----------------------------
+# Limine EFI installation with clickable lsblk
 progress_start "Installing Limine EFI Bootloader..."
 
-# Limine installation
-LIMINE_URL="https://github.com/limine-bootloader/limine/releases/download/4.16/limine-4.16.zip"
-LIMINE_ZIP="$HOME/limine.zip"
+# Detect EFI partitions
+EFI_DEVICES=($(lsblk -o NAME,SIZE,FSTYPE,LABEL,MOUNTPOINT | grep -i EFI | awk '{print "/dev/"$1}'))
 
-if ! wget -O "$LIMINE_ZIP" "$LIMINE_URL" 2>&1 | tee -a "$LOG_FILE"; then
-    log_msg "Error downloading Limine"
+if [ ${#EFI_DEVICES[@]} -eq 0 ]; then
+    # fallback: manual entry if nothing auto-detected
+    EFI_CHOICE=$(zenity --entry \
+        --title="Limine EFI Installer" \
+        --text="No EFI partitions auto-detected. Enter EFI partition manually:" \
+        --entry-text "/dev/sda1")
+else
+    # clickable list of EFI devices with size and label
+    EFI_CHOICE=$(zenity --list \
+        --title="Select EFI Partition" \
+        --column="Device" --column="Size" --column="Label" \
+        $(for dev in "${EFI_DEVICES[@]}"; do
+            SIZE=$(lsblk -no SIZE "$dev")
+            LABEL=$(lsblk -no LABEL "$dev")
+            echo "$dev $SIZE $LABEL"
+        done))
 fi
 
-if unzip "$LIMINE_ZIP" -d "$HOME/limine" 2>&1 | tee -a "$LOG_FILE"; then
-    cd "$HOME/limine" || log_msg "Cannot cd to $HOME/limine"
-    sudo make install 2>&1 | tee -a "$LOG_FILE" || log_msg "Error installing Limine"
+# Make sure something was selected
+if [ -z "$EFI_CHOICE" ]; then
+    log_msg "No EFI partition selected"
+    zenity --error --text="No EFI partition selected. Limine installation skipped."
 else
-    log_msg "Limine unzip failed"
+    echo "Selected EFI partition: $EFI_CHOICE"
+
+    # Download Limine
+    LIMINE_URL="https://github.com/limine-bootloader/limine/releases/download/4.16/limine-4.16.zip"
+    LIMINE_ZIP="$HOME/limine.zip"
+
+    if ! wget -O "$LIMINE_ZIP" "$LIMINE_URL" 2>&1 | tee -a "$LOG_FILE"; then
+        log_msg "Error downloading Limine"
+    fi
+
+    # Unzip and install
+    if unzip "$LIMINE_ZIP" -d "$HOME/limine" 2>&1 | tee -a "$LOG_FILE"; then
+        cd "$HOME/limine" || log_msg "Cannot cd to $HOME/limine"
+        sudo make install 2>&1 | tee -a "$LOG_FILE" || log_msg "Error installing Limine"
+    else
+        log_msg "Limine unzip failed"
+    fi
 fi
 
 progress_update 75
-
 # -----------------------------
 # Flatpak + Flathub
 progress_start "Installing Flatpak + Flathub..."
