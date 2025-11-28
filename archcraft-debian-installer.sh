@@ -4,233 +4,208 @@
 # Author: Seyed Adrian Saberifar
 # Modes: --repair --silent --minimal --full
 # =======================================================
+LOG_FILE="$HOME/archcraft_install_errors.txt"
+: > "$LOG_FILE"
 
-# ------------------ Logging ------------------
-log() { echo -e "[INFO] $1"; }
-err() { echo -e "[ERROR] $1"; }
-
-# ------------------ Mode Detection ------------------
-MODE="interactive"
-for arg in "$@"; do
-    case $arg in
-        --repair) REPAIR=true ;;
-        --silent) SILENT=true ;;
-        --minimal) MINIMAL=true ;;
-        --full) FULL=true ;;
-        --help)
-            echo "Usage: $0 [--repair] [--silent] [--minimal] [--full]"
-            echo "  --repair  : reinstall all packages/components"
-            echo "  --silent  : non-interactive, default options"
-            echo "  --minimal : essential + Openbox + Plank only"
-            echo "  --full    : install everything"
-            exit 0 ;;
-    esac
-done
-
-# ------------------ Helper Functions ------------------
-ensure_pkg() {
-    local pkg=$1
-    if $REPAIR || ! dpkg -s "$pkg" &>/dev/null; then
-        log "Installing missing package: $pkg"
-        sudo apt -y install "$pkg" || err "Failed to install $pkg"
-    else
-        log "$pkg already installed, skipping..."
+# -----------------------------
+# Function to log warnings/errors only
+log_msg() {
+    local msg="$1"
+    if [[ "$msg" == *warning* ]] || [[ "$msg" == *error* ]] || [[ "$msg" == *failed* ]]; then
+        echo "$msg" >> "$LOG_FILE"
     fi
 }
 
+# -----------------------------
+# Progress bar with Zenity
 progress_start() {
-    if [ -z "$SILENT" ]; then
-        ( 
-            echo "0" ; sleep 0.1
-        ) | zenity --progress --title="Archcraft Installer" \
-            --text="$1" --percentage=0 --auto-close --width=400 &
-        PROG_PID=$!
-    fi
+    exec 3> >(zenity --progress \
+        --title="Archcraft Installer" \
+        --text="$1" \
+        --percentage=0 \
+        --auto-close \
+        --width=500)
 }
 
 progress_update() {
-    if [ -z "$SILENT" ] && [ ! -z "$PROG_PID" ]; then
-        echo "$1" | zenity --progress --title="Archcraft Installer" --percentage="$1" --no-cancel &
-    fi
+    local pct="$1"
+    echo "$pct" >&3
 }
 
 progress_end() {
-    if [ ! -z "$PROG_PID" ]; then
-        wait $PROG_PID 2>/dev/null
-    fi
+    exec 3>&-
 }
 
-# ------------------ Essentials ------------------
-ESSENTIALS=(sudo wget git curl unzip xz-utils tar build-essential cmake make meson ninja-build python3 python3-tk xprintidle zenity fastfetch)
-for pkg in "${ESSENTIALS[@]}"; do
-    ensure_pkg "$pkg"
+# -----------------------------
+# Initial progress
+progress_start "Starting Archcraft Openbox Installer..."
+progress_update 5
+
+# -----------------------------
+# Ensure dependencies
+PACKAGES=(sudo wget git curl unzip xz-utils tar build-essential cmake make meson ninja-build python3 python3-tk xprintidle zenity fastfetch)
+for pkg in "${PACKAGES[@]}"; do
+    dpkg -s "$pkg" &>/dev/null || {
+        echo "Installing missing package: $pkg"
+        if ! sudo apt-get install -y "$pkg" 2>&1 | tee -a "$LOG_FILE"; then
+            log_msg "Error installing $pkg"
+        fi
+    done
 done
+progress_update 15
 
-# ------------------ GUI Welcome ------------------
-if [ -z "$SILENT" ]; then
-    zenity --info --title="Archcraft Installer" \
-        --text="Welcome! This installer transforms Debian into Archcraft Openbox style.\nChoose components next."
-fi
-
-# ------------------ Component Selection ------------------
-if [ -z "$SILENT" ]; then
-    COMPONENTS=$(zenity --list --checklist \
-        --title="Select components to install" \
-        --text="Choose what to install" \
-        --column="Install" --column="Component" \
-        TRUE "Openbox + Plank" \
-        TRUE "XFCE utilities" \
-        TRUE "Themes + Fonts" \
-        TRUE "Flatpak + Flathub" \
-        TRUE "Snap" \
-        TRUE "Homebrew" \
-        TRUE "Limine EFI" \
-        TRUE "Screensaver (username flying text idle-time)" \
-        --separator=",")
-    IFS=',' read -ra SELECTION <<< "$COMPONENTS"
+# -----------------------------
+# Limine EFI detection
+EFI_DEVICES=($(lsblk -o NAME,LABEL,FSTYPE | grep -i EFI | awk '{print "/dev/"$1}'))
+if [ ${#EFI_DEVICES[@]} -eq 0 ]; then
+    EFI_CHOICE=$(zenity --entry --title="Limine EFI Installer" --text="No EFI partitions auto-detected. Enter EFI partition manually:" --entry-text "/dev/sda1")
 else
-    # Silent/default: install all
-    SELECTION=("Openbox + Plank" "XFCE utilities" "Themes + Fonts" "Flatpak + Flathub" "Snap" "Homebrew" "Limine EFI" "Screensaver (username flying text idle-time)")
+    EFI_CHOICE=$(zenity --list --title="Select EFI Partition" --column="EFI Devices" "${EFI_DEVICES[@]}")
 fi
+progress_update 20
 
-# ------------------ Install Selected Components ------------------
-TOTAL=${#SELECTION[@]}
-COUNT=0
-for item in "${SELECTION[@]}"; do
-    PERCENT=$(( COUNT * 100 / TOTAL ))
-    progress_update "$PERCENT"
-    case $item in
-        "Openbox + Plank")
-            log "Installing Openbox + Plank..."
-            sudo apt update
-            sudo apt -y install xorg openbox obconf plank ;;
-        "XFCE utilities")
-            log "Installing XFCE utilities..."
-            sudo apt -y install xfce4 xfce4-goodies alacritty rofi nitrogen feh fastfetch kitty pcmanfm ;;
-        "Themes + Fonts")
-            log "Installing Themes and Fonts..."
-            sudo apt -y install adwaita-icon-theme arc-theme papirus-icon-theme fonts-ubuntu fonts-font-awesome ;;
-        "Flatpak + Flathub")
-            log "Installing Flatpak + Flathub..."
-            sudo apt -y install flatpak
-            sudo flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo ;;
-        "Snap")
-            log "Installing Snap..."
-            sudo apt -y install snapd
-            sudo systemctl enable --now snapd.socket
-            sudo ln -s /var/lib/snapd/snap /snap 2>/dev/null || true ;;
-        "Homebrew")
-            log "Installing Homebrew..."
-            NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-            eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv 2>/dev/null || echo '')" ;;
-        "Limine EFI")
-            log "Installing Limine EFI bootloader..."
-            LIMINE_URL=$(curl -s https://api.github.com/repos/limine-bootloader/limine/releases/latest \
-                | grep browser_download_url | grep x86_64-linux | cut -d '"' -f 4)
-            wget -O ~/limine.zip "$LIMINE_URL"
-            unzip ~/limine.zip -d ~/limine
-            cd ~/limine || continue
-            if [[ -d /boot/efi ]]; then sudo ./limine-install.sh; fi ;;
-        "Screensaver (username flying text idle-time)")
-            if [ -z "$SILENT" ]; then
-                SC_TIMEOUT=$(zenity --entry --title="Screensaver Timeout" \
-                    --text="Enter inactivity timeout in minutes:" --entry-text="5")
-            else
-                SC_TIMEOUT=5
-            fi
-            SC_TIMEOUT=${SC_TIMEOUT:-5}
-            mkdir -p ~/.config/archcraft-screensaver
-            echo "$SC_TIMEOUT" > ~/.config/archcraft-screensaver/config
-            mkdir -p ~/bin
-            cat > ~/bin/username_flying_text.py <<'EOF'
-#!/usr/bin/env python3
-import tkinter as tk, random, os
-root = tk.Tk()
-root.attributes("-fullscreen", True)
-root.configure(bg='black')
-texts = []
-colors = ['red','green','blue','yellow','cyan','magenta','white']
-width = root.winfo_screenwidth()
-height = root.winfo_screenheight()
-username = os.environ.get("USER")
-for i in range(20):
-    txt = tk.Label(root, text=f"{username}\non Archcraft", fg=random.choice(colors),
-                   bg='black', font=("Courier", random.randint(20,40)), justify='center')
-    txt.place(x=random.randint(0,width), y=random.randint(0,height))
-    dx = random.choice([-3,-2,-1,1,2,3])
-    dy = random.choice([-3,-2,-1,1,2,3])
-    texts.append((txt, dx, dy))
-def move():
-    for i, (lbl, dx, dy) in enumerate(texts):
-        x = lbl.winfo_x() + dx
-        y = lbl.winfo_y() + dy
-        if x < 0 or x > width-200: dx *= -1
-        if y < 0 or y > height-100: dy *= -1
-        lbl.place(x=x, y=y)
-        texts[i] = (lbl, dx, dy)
-    root.after(50, move)
-move()
-root.mainloop()
-EOF
-            chmod +x ~/bin/username_flying_text.py
-            mkdir -p ~/.config/systemd/user
-            cat > ~/.config/systemd/user/archcraft-screensaver.service <<'EOF'
-[Unit]
-Description=Archcraft flying username screensaver
-[Service]
-Type=simple
-ExecStart=/bin/bash -c '
-CONFIG="$HOME/.config/archcraft-screensaver/config"
-while true; do
-    IDLE_MS=$(xprintidle)
-    IDLE_MIN=$(cat "$CONFIG")
-    THRESHOLD=$((IDLE_MIN*60*1000))
-    if [ "$IDLE_MS" -ge "$THRESHOLD" ]; then
-        ~/bin/username_flying_text.py
+# -----------------------------
+# Core system packages install
+CORE_PKGS=(xorg openbox obconf plank xfce4 xfce4-goodies alacritty rofi nitrogen feh kitty pcmanfm)
+for pkg in "${CORE_PKGS[@]}"; do
+    echo "Installing $pkg..."
+    if ! sudo apt-get install -y "$pkg" 2>&1 | tee -a "$LOG_FILE"; then
+        log_msg "Error installing $pkg"
     fi
-    sleep 5
 done
-'
-Restart=always
-EOF
-            systemctl --user daemon-reload
-            systemctl --user enable --now archcraft-screensaver.service ;;
-    esac
-    COUNT=$((COUNT + 1))
-done
-progress_end
+progress_update 50
 
-# ------------------ Archcraft Dotfiles ------------------
-log "Pulling Archcraft Openbox dotfiles..."
-mkdir -p ~/.config
-git clone https://github.com/archcraft-os/archcraft-openbox.git ~/archcraft-openbox
-cp -r ~/archcraft-openbox/files/* ~/.config/ || true
+# -----------------------------
+# Create user config directories
+mkdir -p "$HOME/.config/autostart" 2>/dev/null || log_msg "Warning: Cannot create ~/.config/autostart"
+mkdir -p "$HOME/.local/share/fonts" 2>/dev/null || log_msg "Warning: Cannot create ~/.local/share/fonts"
 
-# ------------------ Autostart Plank ------------------
-mkdir -p ~/.config/autostart
-cat > ~/.config/autostart/plank.desktop <<EOL
-[Desktop Entry]
-Type=Application
-Exec=plank
-Hidden=false
-NoDisplay=false
-X-GNOME-Autostart-enabled=true
-Name=Plank
-Comment=Start Plank dock
-EOL
+progress_update 60
 
-# ------------------ Wallpapers + Font Cache ------------------
-mkdir -p ~/Pictures/Wallpapers
-cp -r ~/archcraft-openbox/files/wallpapers/* ~/Pictures/Wallpapers/ || true
-fc-cache -fv
+progress_update 65
+progress_start "Installing Limine EFI Bootloader..."
 
-# ------------------ Cleanup ------------------
-sudo apt -y autoremove
-sudo apt -y clean
+# Limine installation
+LIMINE_URL="https://github.com/limine-bootloader/limine/releases/download/4.16/limine-4.16.zip"
+LIMINE_ZIP="$HOME/limine.zip"
 
-# ------------------ Completion ------------------
-if [ -z "$SILENT" ]; then
-    zenity --info --title="Installation Complete" --text="Debian → Archcraft Openbox transformation is complete!\nReboot to start your GUI."
-else
-    log "Installation complete! Reboot to start GUI."
+if ! wget -O "$LIMINE_ZIP" "$LIMINE_URL" 2>&1 | tee -a "$LOG_FILE"; then
+    log_msg "Error downloading Limine"
 fi
+
+if unzip "$LIMINE_ZIP" -d "$HOME/limine" 2>&1 | tee -a "$LOG_FILE"; then
+    cd "$HOME/limine" || log_msg "Cannot cd to $HOME/limine"
+    sudo make install 2>&1 | tee -a "$LOG_FILE" || log_msg "Error installing Limine"
+else
+    log_msg "Limine unzip failed"
+fi
+
+progress_update 75
+
+# -----------------------------
+# Flatpak + Flathub
+progress_start "Installing Flatpak + Flathub..."
+if ! sudo apt-get install -y flatpak 2>&1 | tee -a "$LOG_FILE"; then
+    log_msg "Error installing Flatpak"
+fi
+flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo 2>&1 | tee -a "$LOG_FILE" || log_msg "Error adding Flathub"
+progress_update 80
+
+# -----------------------------
+# Snap
+progress_start "Installing Snap..."
+if ! sudo apt-get install -y snapd 2>&1 | tee -a "$LOG_FILE"; then
+    log_msg "Error installing snapd"
+fi
+progress_update 82
+
+# -----------------------------
+# Homebrew
+progress_start "Installing Homebrew..."
+NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" 2>&1 | tee -a "$LOG_FILE" || log_msg "Error installing Homebrew"
+
+# Add Homebrew to PATH
+echo 'eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"' >> "$HOME/.bashrc"
+eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+
+progress_update 85
+
+# -----------------------------
+# Fonts + Themes
+progress_start "Installing Fonts & Themes..."
+# Example font Ubuntu (fallback if not available)
+if ! sudo apt-get install -y fonts-ubuntu 2>&1 | tee -a "$LOG_FILE"; then
+    log_msg "Warning: fonts-ubuntu not available"
+fi
+
+# Cache fonts
+fc-cache -f 2>&1 | tee -a "$LOG_FILE"
+
+progress_update 90
+
+# -----------------------------
+# Set wallpapers (if available)
+WALLPAPER_DIR="$HOME/archcraft-openbox/files/wallpapers"
+if [ -d "$WALLPAPER_DIR" ]; then
+    cp "$WALLPAPER_DIR"/* "$HOME/Pictures/" 2>&1 | tee -a "$LOG_FILE" || log_msg "Cannot copy wallpapers"
+fi
+
+progress_update 92
+
+progress_update 92
+progress_start "Setting up Archcraft Openbox dotfiles..."
+
+DOTFILES_DIR="$HOME/archcraft-openbox"
+if [ ! -d "$DOTFILES_DIR" ]; then
+    git clone https://github.com/Seyed-A/archcraft-openbox.git "$DOTFILES_DIR" 2>&1 | tee -a "$LOG_FILE" || log_msg "Error cloning archcraft-openbox repo"
+else
+    log_msg "archcraft-openbox directory exists, skipping clone"
+fi
+
+# Autostart Plank
+AUTOSTART_DIR="$HOME/.config/autostart"
+mkdir -p "$AUTOSTART_DIR" 2>&1 | tee -a "$LOG_FILE" || log_msg "Cannot create autostart directory"
+if [ -d "$AUTOSTART_DIR" ]; then
+    cp "$DOTFILES_DIR/files/autostart/plank.desktop" "$AUTOSTART_DIR/" 2>&1 | tee -a "$LOG_FILE" || log_msg "Cannot copy plank.desktop"
+fi
+
+# Copy wallpapers if available
+WALLPAPER_SRC="$DOTFILES_DIR/files/wallpapers"
+WALLPAPER_DEST="$HOME/Pictures"
+mkdir -p "$WALLPAPER_DEST"
+if [ -d "$WALLPAPER_SRC" ]; then
+    cp "$WALLPAPER_SRC"/* "$WALLPAPER_DEST/" 2>&1 | tee -a "$LOG_FILE" || log_msg "Cannot copy wallpapers"
+fi
+
+progress_update 95
+
+# -----------------------------
+# XFCE tweaks (if XFCE installed)
+progress_start "Applying XFCE tweaks..."
+XFCE_CONF="$HOME/.config/xfce4"
+mkdir -p "$XFCE_CONF" 2>&1 | tee -a "$LOG_FILE" || log_msg "Cannot create XFCE config directory"
+
+# Example tweak: disable screensaver service errors
+systemctl --user disable archcraft-screensaver.service 2>&1 | tee -a "$LOG_FILE" || log_msg "Cannot disable archcraft-screensaver.service"
+
+progress_update 98
+
+progress_start "Finalizing installation..."
+
+# Clean up temporary files
+TEMP_DIRS=("$HOME/limine" "$HOME/limine.zip")
+for dir in "${TEMP_DIRS[@]}"; do
+    if [ -e "$dir" ]; then
+        rm -rf "$dir" 2>&1 | tee -a "$LOG_FILE" || log_msg "Cannot remove $dir"
+    fi
+done
+
+progress_update 99
+
+# Final message
+progress_start "Installation Complete!"
+echo -e "\nInstallation finished successfully!"
+echo "All warnings and errors (only) are logged in:"
+echo "$LOG_FILE"
+
+progress_update 100
