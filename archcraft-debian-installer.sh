@@ -70,7 +70,7 @@ progress_update 15
 
 # -----------------------------
 # Core system packages install
-CORE_PKGS=(xorg openbox obconf plank xfce4 xfce4-goodies alacritty rofi nitrogen feh kitty pcmanfm)
+CORE_PKGS=(xorg openbox obconf plank xfce4 xfce4-goodies rofi nitrogen feh kitty pcmanfm)
 for pkg in "${CORE_PKGS[@]}"; do
     echo "Installing $pkg..."
     if ! sudo apt-get install -y "$pkg" 2>&1 | tee -a "$LOG_FILE"; then
@@ -78,6 +78,24 @@ for pkg in "${CORE_PKGS[@]}"; do
     fi
 done
 progress_update 50
+
+# -----------------------------
+# Install Alacritty with Fira Code
+progress_start "Installing Alacritty and Fira Code..."
+# Force install Fira Code first
+FIRA_DIR="$HOME/.local/share/fonts/FiraCode"
+mkdir -p "$FIRA_DIR"
+wget -O "$FIRA_DIR/FiraCode.zip" "https://github.com/tonsky/FiraCode/releases/download/6.3/Fira_Code_v6.3.zip" 2>&1 | tee -a "$LOG_FILE"
+unzip -o "$FIRA_DIR/FiraCode.zip" -d "$FIRA_DIR" 2>&1 | tee -a "$LOG_FILE"
+fc-cache -f 2>&1 | tee -a "$LOG_FILE"
+
+# Then install Alacritty
+if ! sudo apt-get install -y alacritty 2>&1 | tee -a "$LOG_FILE"; then
+    log_msg "Error installing Alacritty"
+fi
+progress_update 55
+progress_end
+
 
 # -----------------------------
 # Create user config directories
