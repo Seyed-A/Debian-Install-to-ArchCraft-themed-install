@@ -1,9 +1,10 @@
 #!/bin/bash
 # =======================================================
 # Debian → Archcraft Openbox Full Installer (Single-File)
-# Author: Seyed Adrian Saberifar
-# Modes: --repair --silent --minimal --full
+# Author: Seyed Adrian Saberifar (Modified)
+# Features: GUI progress bars, clickable EFI selection, single sudo password, error log
 # =======================================================
+
 LOG_FILE="$HOME/archcraft_install_errors.txt"
 : > "$LOG_FILE"
 
@@ -37,10 +38,23 @@ progress_end() {
 }
 
 # -----------------------------
+# Ask for sudo once upfront
+if sudo -v; then
+    # Keep-alive: update existing sudo timestamp until script finishes
+    while true; do
+        sudo -n true
+        sleep 60
+        kill -0 "$$" || exit
+    done 2>/dev/null &
+else
+    echo "This script requires sudo access. Exiting."
+    exit 1
+fi
+
+# -----------------------------
 # Initial progress
 progress_start "Starting Archcraft Openbox Installer..."
 progress_update 5
-
 # -----------------------------
 # Ensure dependencies
 PACKAGES=(sudo wget git curl unzip xz-utils tar build-essential cmake make meson ninja-build python3 python3-tk xprintidle zenity fastfetch)
@@ -53,16 +67,6 @@ for pkg in "${PACKAGES[@]}"; do
     }
 done
 progress_update 15
-
-# -----------------------------
-# Limine EFI detection
-EFI_DEVICES=($(lsblk -o NAME,LABEL,FSTYPE | grep -i EFI | awk '{print "/dev/"$1}'))
-if [ ${#EFI_DEVICES[@]} -eq 0 ]; then
-    EFI_CHOICE=$(zenity --entry --title="Limine EFI Installer" --text="No EFI partitions auto-detected. Enter EFI partition manually:" --entry-text "/dev/sda1")
-else
-    EFI_CHOICE=$(zenity --list --title="Select EFI Partition" --column="EFI Devices" "${EFI_DEVICES[@]}")
-fi
-progress_update 20
 
 # -----------------------------
 # Core system packages install
@@ -79,61 +83,60 @@ progress_update 50
 # Create user config directories
 mkdir -p "$HOME/.config/autostart" 2>/dev/null || log_msg "Warning: Cannot create ~/.config/autostart"
 mkdir -p "$HOME/.local/share/fonts" 2>/dev/null || log_msg "Warning: Cannot create ~/.local/share/fonts"
-
 progress_update 60
+progress_start "Installing Limine EFI Bootloader..."
+progress_update 65
 
 # -----------------------------
-# Limine EFI installation with clickable lsblk
-progress_start "Installing Limine EFI Bootloader..."
-
-# Detect EFI partitions
-EFI_DEVICES=($(lsblk -o NAME,SIZE,FSTYPE,LABEL,MOUNTPOINT | grep -i EFI | awk '{print "/dev/"$1}'))
+# Detect EFI partitions for clickable selection
+EFI_DEVICES=($(lsblk -o NAME,LABEL,FSTYPE,MOUNTPOINT | grep -i 'vfat\|efi' | awk '{print "/dev/"$1 " (" $2 ")"}'))
 
 if [ ${#EFI_DEVICES[@]} -eq 0 ]; then
-    # fallback: manual entry if nothing auto-detected
     EFI_CHOICE=$(zenity --entry \
         --title="Limine EFI Installer" \
         --text="No EFI partitions auto-detected. Enter EFI partition manually:" \
         --entry-text "/dev/sda1")
 else
-    # clickable list of EFI devices with size and label
     EFI_CHOICE=$(zenity --list \
         --title="Select EFI Partition" \
-        --column="Device" --column="Size" --column="Label" \
-        $(for dev in "${EFI_DEVICES[@]}"; do
-            SIZE=$(lsblk -no SIZE "$dev")
-            LABEL=$(lsblk -no LABEL "$dev")
-            echo "$dev $SIZE $LABEL"
-        done))
+        --text="Choose EFI partition for Limine" \
+        --column="EFI Devices" "${EFI_DEVICES[@]}")
 fi
 
-# Make sure something was selected
 if [ -z "$EFI_CHOICE" ]; then
-    log_msg "No EFI partition selected"
-    zenity --error --text="No EFI partition selected. Limine installation skipped."
+    log_msg "User did not select an EFI partition"
+    zenity --error --text="EFI partition not selected. Limine installation skipped."
 else
     echo "Selected EFI partition: $EFI_CHOICE"
+fi
 
-    # Download Limine
-    LIMINE_URL="https://github.com/limine-bootloader/limine/releases/download/4.16/limine-4.16.zip"
-    LIMINE_ZIP="$HOME/limine.zip"
+progress_update 70
 
-    if ! wget -O "$LIMINE_ZIP" "$LIMINE_URL" 2>&1 | tee -a "$LOG_FILE"; then
-        log_msg "Error downloading Limine"
-    fi
+# -----------------------------
+# Limine installation
+LIMINE_URL="https://github.com/limine-bootloader/limine/releases/download/4.16/limine-4.16.zip"
+LIMINE_ZIP="$HOME/limine.zip"
+LIMINE_DIR="$HOME/limine"
 
-    # Unzip and install
-    if unzip "$LIMINE_ZIP" -d "$HOME/limine" 2>&1 | tee -a "$LOG_FILE"; then
-        cd "$HOME/limine" || log_msg "Cannot cd to $HOME/limine"
+# Download Limine
+if ! wget -O "$LIMINE_ZIP" "$LIMINE_URL" 2>&1 | tee -a "$LOG_FILE"; then
+    log_msg "Error downloading Limine"
+fi
+
+# Unzip Limine
+if unzip -o "$LIMINE_ZIP" -d "$LIMINE_DIR" 2>&1 | tee -a "$LOG_FILE"; then
+    cd "$LIMINE_DIR" || log_msg "Cannot cd to $LIMINE_DIR"
+    # Install Limine (requires EFI choice)
+    if [ -n "$EFI_CHOICE" ]; then
         sudo make install 2>&1 | tee -a "$LOG_FILE" || log_msg "Error installing Limine"
-    else
-        log_msg "Limine unzip failed"
     fi
+else
+    log_msg "Limine unzip failed"
 fi
 
 progress_update 75
 # -----------------------------
-# Flatpak + Flathub
+# Flatpak + Flathub installation
 progress_start "Installing Flatpak + Flathub..."
 if ! sudo apt-get install -y flatpak 2>&1 | tee -a "$LOG_FILE"; then
     log_msg "Error installing Flatpak"
@@ -142,7 +145,7 @@ flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flat
 progress_update 80
 
 # -----------------------------
-# Snap
+# Snap installation
 progress_start "Installing Snap..."
 if ! sudo apt-get install -y snapd 2>&1 | tee -a "$LOG_FILE"; then
     log_msg "Error installing snapd"
@@ -150,92 +153,36 @@ fi
 progress_update 82
 
 # -----------------------------
-# Homebrew
+# Homebrew installation
 progress_start "Installing Homebrew..."
-NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" 2>&1 | tee -a "$LOG_FILE" || log_msg "Error installing Homebrew"
+NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" 2>&1 | tee -a "$LOG_FILE" || log_msg "Homebrew install failed"
 
-# Add Homebrew to PATH
+# Configure Homebrew for the current shell
 echo 'eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"' >> "$HOME/.bashrc"
 eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
 
 progress_update 85
 
 # -----------------------------
-# Fonts + Themes
-progress_start "Installing Fonts & Themes..."
-# Example font Ubuntu (fallback if not available)
+# Fonts and themes installation
+progress_start "Installing Themes and Fonts..."
+mkdir -p "$HOME/.local/share/fonts" 2>/dev/null || log_msg "Cannot create ~/.local/share/fonts"
+
+# Attempt to install Ubuntu fonts
 if ! sudo apt-get install -y fonts-ubuntu 2>&1 | tee -a "$LOG_FILE"; then
-    log_msg "Warning: fonts-ubuntu not available"
+    log_msg "fonts-ubuntu not available or failed"
 fi
-
-# Cache fonts
-fc-cache -f 2>&1 | tee -a "$LOG_FILE"
-
 progress_update 90
 
 # -----------------------------
-# Set wallpapers (if available)
-WALLPAPER_DIR="$HOME/archcraft-openbox/files/wallpapers"
-if [ -d "$WALLPAPER_DIR" ]; then
-    cp "$WALLPAPER_DIR"/* "$HOME/Pictures/" 2>&1 | tee -a "$LOG_FILE" || log_msg "Cannot copy wallpapers"
-fi
-
-progress_update 92
-
-progress_update 92
-progress_start "Setting up Archcraft Openbox dotfiles..."
-
-DOTFILES_DIR="$HOME/archcraft-openbox"
-if [ ! -d "$DOTFILES_DIR" ]; then
-    git clone https://github.com/Seyed-A/archcraft-openbox.git "$DOTFILES_DIR" 2>&1 | tee -a "$LOG_FILE" || log_msg "Error cloning archcraft-openbox repo"
-else
-    log_msg "archcraft-openbox directory exists, skipping clone"
-fi
-
-# Autostart Plank
-AUTOSTART_DIR="$HOME/.config/autostart"
-mkdir -p "$AUTOSTART_DIR" 2>&1 | tee -a "$LOG_FILE" || log_msg "Cannot create autostart directory"
-if [ -d "$AUTOSTART_DIR" ]; then
-    cp "$DOTFILES_DIR/files/autostart/plank.desktop" "$AUTOSTART_DIR/" 2>&1 | tee -a "$LOG_FILE" || log_msg "Cannot copy plank.desktop"
-fi
-
-# Copy wallpapers if available
-WALLPAPER_SRC="$DOTFILES_DIR/files/wallpapers"
-WALLPAPER_DEST="$HOME/Pictures"
-mkdir -p "$WALLPAPER_DEST"
-if [ -d "$WALLPAPER_SRC" ]; then
-    cp "$WALLPAPER_SRC"/* "$WALLPAPER_DEST/" 2>&1 | tee -a "$LOG_FILE" || log_msg "Cannot copy wallpapers"
-fi
-
-progress_update 95
-
-# -----------------------------
-# XFCE tweaks (if XFCE installed)
-progress_start "Applying XFCE tweaks..."
-XFCE_CONF="$HOME/.config/xfce4"
-mkdir -p "$XFCE_CONF" 2>&1 | tee -a "$LOG_FILE" || log_msg "Cannot create XFCE config directory"
-
-# Example tweak: disable screensaver service errors
-systemctl --user disable archcraft-screensaver.service 2>&1 | tee -a "$LOG_FILE" || log_msg "Cannot disable archcraft-screensaver.service"
-
-progress_update 98
-
+# Final setup
 progress_start "Finalizing installation..."
+# Reload font cache
+fc-cache -fv 2>&1 | tee -a "$LOG_FILE" || log_msg "Font cache update failed"
 
-# Clean up temporary files
-TEMP_DIRS=("$HOME/limine" "$HOME/limine.zip")
-for dir in "${TEMP_DIRS[@]}"; do
-    if [ -e "$dir" ]; then
-        rm -rf "$dir" 2>&1 | tee -a "$LOG_FILE" || log_msg "Cannot remove $dir"
-    fi
-done
-
-progress_update 99
-
-# Final message
-progress_start "Installation Complete!"
-echo -e "\nInstallation finished successfully!"
-echo "All warnings and errors (only) are logged in:"
-echo "$LOG_FILE"
+# Notify user of log file location
+zenity --info --title="Installation Complete" \
+    --text="Archcraft Openbox installation is complete.\n\nAll errors and warnings are logged here:\n$LOG_FILE"
 
 progress_update 100
+progress_end
