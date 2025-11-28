@@ -128,14 +128,11 @@ The installer lets you optionally install and configure:
 ## Notes
 
 * The installer supports both **interactive GUI mode** via `zenity` and a **silent mode** for scripting.
-  | Option      | Description                                                           | Behavior                                                                                                                                                    |
-| ----------- | --------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `--repair`  | Reinstalls **all components and packages**, even if already installed | Overrides skip checks, reinstalls essentials, GUI, utilities, themes, fonts, Flatpak, Snap, Homebrew, Limine, screensaver, dotfiles, wallpapers, font cache |
-| `--silent`  | Non-interactive install; **skips all zenity prompts**                 | Runs all steps automatically with default choices; e.g., default screensaver timeout, installs all components without asking user                           |
-| `--minimal` | Installs only **essential packages + Openbox + Plank + dotfiles**     | Skips XFCE utilities, Flatpak, Snap, Homebrew, Limine, screensaver, wallpapers                                                                              |
-| `--full`    | Installs **everything**                                               | Same as default full installer                                                                                                                              |
-| `--help`    | Shows usage instructions                                              | Prints a brief description of each mode and exits                                                                                                           |
-
+* `--repair`  | Reinstalls **all components and packages**, even if already installed 
+*  `--silent`  | Non-interactive install; **skips all zenity prompts**                 
+*  `--minimal` | Installs only **essential packages + Openbox + Plank + dotfiles**  
+*  `--full`    | Installs **everything**                                               
+*  `--help`    | Shows usage instructions                                              
 * Errors can be optionally reported to GitHub if `gh` CLI is installed and authenticated.
 * You can rollback system state using the backup created during installation.
 
