@@ -5,7 +5,15 @@
 # Features: GUI progress bars, clickable EFI selection, single sudo password, error log
 # =======================================================
 
-LOG_FILE="$HOME/archcraft_install_errors.txt"
+
+# -----------------------------
+# Installer home directory
+INSTALLER_HOME="$HOME/.archcraft_installer"
+mkdir -p "$INSTALLER_HOME"
+
+# -----------------------------
+# Logs
+LOG_FILE="$INSTALLER_HOME/archcraft_install_errors.txt"
 : > "$LOG_FILE"
 
 # -----------------------------
@@ -38,25 +46,19 @@ progress_end() {
 }
 
 # -----------------------------
-# Ask for sudo once upfront
-if sudo -v; then
-    # Keep-alive: update existing sudo timestamp until script finishes
-    while true; do
-        sudo -n true
-        sleep 60
-        kill -0 "$$" || exit
-    done 2>/dev/null &
-else
-    echo "This script requires sudo access. Exiting."
-    exit 1
-fi
+# Request sudo once
+sudo -v || { echo "This installer requires sudo access"; exit 1; }
+
+# Keep sudo alive
+( while true; do sudo -n true; sleep 60; kill -0 "$$" || exit; done ) 2>/dev/null &
 
 # -----------------------------
-# Initial progress
+# Start installer progress
 progress_start "Starting Archcraft Openbox Installer..."
 progress_update 5
+
 # -----------------------------
-# Ensure dependencies
+# Ensure core dependencies
 PACKAGES=(sudo wget git curl unzip xz-utils tar build-essential cmake make meson ninja-build python3 python3-tk xprintidle zenity fastfetch)
 for pkg in "${PACKAGES[@]}"; do
     dpkg -s "$pkg" &>/dev/null || {
@@ -67,47 +69,9 @@ for pkg in "${PACKAGES[@]}"; do
     }
 done
 progress_update 15
-
 # -----------------------------
-# Core system packages install
-CORE_PKGS=(xorg openbox obconf plank xfce4 xfce4-goodies rofi nitrogen feh kitty pcmanfm)
-for pkg in "${CORE_PKGS[@]}"; do
-    echo "Installing $pkg..."
-    if ! sudo apt-get install -y "$pkg" 2>&1 | tee -a "$LOG_FILE"; then
-        log_msg "Error installing $pkg"
-    fi
-done
-progress_update 50
-
-# -----------------------------
-# Install Alacritty with Fira Code
-progress_start "Installing Alacritty and Fira Code..."
-# Force install Fira Code first
-FIRA_DIR="$HOME/.local/share/fonts/FiraCode"
-mkdir -p "$FIRA_DIR"
-wget -O "$FIRA_DIR/FiraCode.zip" "https://github.com/tonsky/FiraCode/releases/download/6.3/Fira_Code_v6.3.zip" 2>&1 | tee -a "$LOG_FILE"
-unzip -o "$FIRA_DIR/FiraCode.zip" -d "$FIRA_DIR" 2>&1 | tee -a "$LOG_FILE"
-fc-cache -f 2>&1 | tee -a "$LOG_FILE"
-
-# Then install Alacritty
-if ! sudo apt-get install -y alacritty 2>&1 | tee -a "$LOG_FILE"; then
-    log_msg "Error installing Alacritty"
-fi
-progress_update 55
-progress_end
-
-
-# -----------------------------
-# Create user config directories
-mkdir -p "$HOME/.config/autostart" 2>/dev/null || log_msg "Warning: Cannot create ~/.config/autostart"
-mkdir -p "$HOME/.local/share/fonts" 2>/dev/null || log_msg "Warning: Cannot create ~/.local/share/fonts"
-progress_update 60
-progress_start "Installing Limine EFI Bootloader..."
-progress_update 65
-
-# -----------------------------
-# Detect EFI partitions for clickable selection
-EFI_DEVICES=($(lsblk -o NAME,LABEL,FSTYPE,MOUNTPOINT | grep -i 'vfat\|efi' | awk '{print "/dev/"$1 " (" $2 ")"}'))
+# EFI detection & selection via Zenity list
+EFI_DEVICES=($(lsblk -o NAME,LABEL,FSTYPE | grep -i EFI | awk '{print "/dev/"$1}'))
 
 if [ ${#EFI_DEVICES[@]} -eq 0 ]; then
     EFI_CHOICE=$(zenity --entry \
@@ -117,90 +81,153 @@ if [ ${#EFI_DEVICES[@]} -eq 0 ]; then
 else
     EFI_CHOICE=$(zenity --list \
         --title="Select EFI Partition" \
-        --text="Choose EFI partition for Limine" \
         --column="EFI Devices" "${EFI_DEVICES[@]}")
 fi
-
-if [ -z "$EFI_CHOICE" ]; then
-    log_msg "User did not select an EFI partition"
-    zenity --error --text="EFI partition not selected. Limine installation skipped."
-else
-    echo "Selected EFI partition: $EFI_CHOICE"
-fi
-
-progress_update 70
+progress_update 20
 
 # -----------------------------
-# Limine installation
+# Prepare Limine bootloader download
+progress_start "Installing Limine EFI Bootloader..."
+LIMINE_DIR="$INSTALLER_HOME/limine"
+mkdir -p "$LIMINE_DIR"
+LIMINE_ZIP="$LIMINE_DIR/limine.zip"
 LIMINE_URL="https://github.com/limine-bootloader/limine/releases/download/4.16/limine-4.16.zip"
-LIMINE_ZIP="$HOME/limine.zip"
-LIMINE_DIR="$HOME/limine"
 
-# Download Limine
 if ! wget -O "$LIMINE_ZIP" "$LIMINE_URL" 2>&1 | tee -a "$LOG_FILE"; then
     log_msg "Error downloading Limine"
 fi
 
-# Unzip Limine
-if unzip -o "$LIMINE_ZIP" -d "$LIMINE_DIR" 2>&1 | tee -a "$LOG_FILE"; then
+if unzip "$LIMINE_ZIP" -d "$LIMINE_DIR" 2>&1 | tee -a "$LOG_FILE"; then
     cd "$LIMINE_DIR" || log_msg "Cannot cd to $LIMINE_DIR"
-    # Install Limine (requires EFI choice)
-    if [ -n "$EFI_CHOICE" ]; then
-        sudo make install 2>&1 | tee -a "$LOG_FILE" || log_msg "Error installing Limine"
-    fi
+    sudo make install 2>&1 | tee -a "$LOG_FILE" || log_msg "Error installing Limine"
 else
     log_msg "Limine unzip failed"
 fi
+progress_update 30
 
-progress_update 75
 # -----------------------------
-# Flatpak + Flathub installation
+# Prepare Fira Code for Alacritty
+FIRA_DIR="$INSTALLER_HOME/fonts/FiraCode"
+mkdir -p "$FIRA_DIR"
+FIRA_ZIP="$FIRA_DIR/FiraCode.zip"
+FIRA_URL="https://github.com/tonsky/FiraCode/releases/download/6.6/Fira_Code_v6.6.zip"
+
+progress_start "Downloading Fira Code font for Alacritty..."
+if ! wget -O "$FIRA_ZIP" "$FIRA_URL" 2>&1 | tee -a "$LOG_FILE"; then
+    log_msg "Error downloading Fira Code"
+fi
+
+# Unzip and install Fira Code locally
+if unzip -o "$FIRA_ZIP" -d "$FIRA_DIR" 2>&1 | tee -a "$LOG_FILE"; then
+    mkdir -p "$HOME/.local/share/fonts"
+    cp -v "$FIRA_DIR/ttf/"*.ttf "$HOME/.local/share/fonts/" 2>&1 | tee -a "$LOG_FILE" || log_msg "Error copying Fira Code fonts"
+    fc-cache -fv 2>&1 | tee -a "$LOG_FILE" || log_msg "Error updating font cache"
+else
+    log_msg "Fira Code unzip failed"
+fi
+progress_update 40
+
+# -----------------------------
+# Alacritty config pointing to Fira Code
+ALACRITTY_CONFIG_DIR="$HOME/.config/alacritty"
+mkdir -p "$ALACRITTY_CONFIG_DIR"
+
+cat > "$ALACRITTY_CONFIG_DIR/alacritty.yml" <<EOF
+font:
+  normal:
+    family: "Fira Code"
+    style: "Regular"
+EOF
+progress_update 45
+# -----------------------------
+# Core DE/WM packages (excluding Alacritty, already handled)
+CORE_PKGS=(xorg openbox obconf plank xfce4 xfce4-goodies rofi nitrogen feh kitty pcmanfm)
+progress_start "Installing core packages..."
+for pkg in "${CORE_PKGS[@]}"; do
+    echo "Installing $pkg..."
+    if ! sudo apt-get install -y "$pkg" 2>&1 | tee -a "$LOG_FILE"; then
+        log_msg "Error installing $pkg"
+    fi
+done
+progress_update 55
+
+# -----------------------------
+# Create user config directories under hidden installer folder
+USER_DIRS=(
+    "$HOME/.archcraft_installer/.config/autostart"
+    "$HOME/.archcraft_installer/.local/share/fonts"
+    "$HOME/.archcraft_installer/.config/alacritty"
+)
+
+for dir in "${USER_DIRS[@]}"; do
+    mkdir -p "$dir" 2>/dev/null || log_msg "Warning: Cannot create $dir"
+done
+progress_update 60
+
+# -----------------------------
+# Copy Alacritty config and fonts into hidden installer folder
+cp -v "$ALACRITTY_CONFIG_DIR/alacritty.yml" "$HOME/.archcraft_installer/.config/alacritty/alacritty.yml" 2>&1 | tee -a "$LOG_FILE" || log_msg "Error copying Alacritty config"
+
+# Fonts already installed locally; also copy to hidden installer folder
+cp -rv "$FIRA_DIR/ttf" "$HOME/.archcraft_installer/.local/share/fonts/FiraCode" 2>&1 | tee -a "$LOG_FILE" || log_msg "Error copying Fira Code to hidden folder"
+
+progress_update 65
+
+# -----------------------------
+# Optional: set default DE/WM session (Openbox)
+progress_start "Setting Openbox as default session..."
+sudo update-alternatives --install /usr/bin/x-session-manager x-session-manager /usr/bin/openbox-session 50 2>&1 | tee -a "$LOG_FILE" || log_msg "Error setting Openbox default session"
+progress_update 70
+# -----------------------------
+# Flatpak + Flathub
 progress_start "Installing Flatpak + Flathub..."
 if ! sudo apt-get install -y flatpak 2>&1 | tee -a "$LOG_FILE"; then
     log_msg "Error installing Flatpak"
 fi
+
+# Add Flathub repository
 flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo 2>&1 | tee -a "$LOG_FILE" || log_msg "Error adding Flathub"
 progress_update 80
 
 # -----------------------------
-# Snap installation
-progress_start "Installing Snap..."
+# Snapd (optional)
+progress_start "Installing Snapd..."
 if ! sudo apt-get install -y snapd 2>&1 | tee -a "$LOG_FILE"; then
     log_msg "Error installing snapd"
 fi
-progress_update 82
-
-# -----------------------------
-# Homebrew installation
-progress_start "Installing Homebrew..."
-NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" 2>&1 | tee -a "$LOG_FILE" || log_msg "Homebrew install failed"
-
-# Configure Homebrew for the current shell
-echo 'eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"' >> "$HOME/.bashrc"
-eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
-
 progress_update 85
 
 # -----------------------------
-# Fonts and themes installation
-progress_start "Installing Themes and Fonts..."
-mkdir -p "$HOME/.local/share/fonts" 2>/dev/null || log_msg "Cannot create ~/.local/share/fonts"
-
-# Attempt to install Ubuntu fonts
-if ! sudo apt-get install -y fonts-ubuntu 2>&1 | tee -a "$LOG_FILE"; then
-    log_msg "fonts-ubuntu not available or failed"
-fi
+# Cleanup temporary files in hidden installer folder
+progress_start "Cleaning up temporary files..."
+rm -rf "$HOME/.archcraft_installer/limine.zip" 2>/dev/null
+rm -rf "$HOME/.archcraft_installer/tmp" 2>/dev/null
 progress_update 90
 
 # -----------------------------
-# Final setup
+# Finalize installer
 progress_start "Finalizing installation..."
-# Reload font cache
-fc-cache -fv 2>&1 | tee -a "$LOG_FILE" || log_msg "Font cache update failed"
+progress_update 95
 
-# Notify user of log file location
-zenity --info --title="Installation Complete" \
-    --text="Archcraft Openbox installation is complete.\n\nAll errors and warnings are logged here:\n$LOG_FILE"
+# Move all remaining installer-related items into hidden folder
+mv -v "$HOME/archcraft_installer_backup" "$HOME/.archcraft_installer/" 2>/dev/null
+mv -v "$HOME/archcraft_installer_export" "$HOME/.archcraft_installer/" 2>/dev/null
+mv -v "$HOME/archcraft_installer_reports" "$HOME/.archcraft_installer/" 2>/dev/null
+mv -v "$HOME/archcraft_openbox" "$HOME/.archcraft_installer/" 2>/dev/null
+mv -v "$HOME/archcraft_installer.json" "$HOME/.archcraft_installer/" 2>/dev/null
+mv -v "$HOME/archcraft_installer.log" "$HOME/.archcraft_installer/" 2>/dev/null
+mv -v "$HOME/archcraft_install_errors.txt" "$HOME/.archcraft_installer/" 2>/dev/null
+mv -v "$HOME/archcraft_installer_updated.sh" "$HOME/.archcraft_installer/" 2>/dev/null
+progress_update 98
 
-progress_update 100
+# -----------------------------
+# Final progress bar
 progress_end
+
+# -----------------------------
+# Notify user of log location
+zenity --info \
+    --title="Archcraft Installer Complete" \
+    --text="Installation finished!\n\nAll error/warning logs are in:\n$HOME/.archcraft_installer/archcraft_install_errors.txt"
+
+echo "Installer finished. Log file location: $HOME/.archcraft_installer/archcraft_install_errors.txt"
